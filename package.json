@@ -9,5 +9,8 @@
   "devDependencies": {
     "jest": "^29.7.0"
   },
+  "engines": {
+    "node": ">=20.0.0 <23.0.0"
+  },
   "license": "Apache-2.0"
 }
