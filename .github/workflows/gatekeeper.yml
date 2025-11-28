@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   pull-requests: write # WAJIB: Izin untuk Bot memberi label, komen, dan menutup PR
+  issues: write
 
 jobs:
   validate-submission:
