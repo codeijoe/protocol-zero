@@ -1,0 +1,13 @@
+{
+  "name": "codeijoe-protocol-zero",
+  "version": "1.0.0",
+  "description": "Codeijoe Proving Ground: Protocol Zero",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "license": "Apache-2.0"
+}

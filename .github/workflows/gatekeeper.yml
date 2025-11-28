@@ -1,0 +1,125 @@
+name: Codeijoe Gatekeeper
+
+# Trigger hanya saat ada Pull Request ke branch main
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'src/**'   # Hanya jalan jika folder src disentuh
+      - 'tests/**' # Monitor folder test untuk deteksi kecurangan
+
+permissions:
+  contents: read
+  pull-requests: write # Izin untuk bot komen di PR
+
+jobs:
+  validate-submission:
+    name: Verify Challenger's Work
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # STEP 1: ANTI-CHEAT CHECK
+      # Cek apakah Challenger mengubah file di folder tests/
+      # ---------------------------------------------------------
+      - name: Detect Cheating (Test Modification)
+        id: anti_cheat
+        uses: tj-actions/changed-files@v41
+        with:
+          files: tests/**
+          
+      - name: Block Cheaters
+        if: steps.anti_cheat.outputs.any_changed == 'true'
+        run: |
+          echo "::error::VIOLATION DETECTED: You modified the test files!"
+          echo "Do not touch files in 'tests/'. Only edit files in 'src/'."
+          exit 1
+
+      # ---------------------------------------------------------
+      # STEP 2: SETUP & TEST
+      # Jalankan environment (misal Node.js) dan Test Runner
+      # ---------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Run The Gauntlet (Unit Tests)
+        id: run_tests
+        # Pastikan script 'test' ada di package.json
+        run: npm test > test-results.txt 2>&1
+        continue-on-error: true # Supaya kita bisa handle error message di step berikutnya
+
+      # ---------------------------------------------------------
+      # STEP 3: AUTOMATED JUDGMENT
+      # Bot memberi feedback langsung
+      # ---------------------------------------------------------
+      - name: Judge The Result
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            // Cek apakah file hasil test ada, jika tidak, anggap fail
+            let testResult = '';
+            try {
+              testResult = fs.readFileSync('test-results.txt', 'utf8');
+            } catch (e) {
+              testResult = 'Test execution failed completely (No output generated).';
+            }
+            
+            const outcome = '${{ steps.run_tests.outcome }}';
+            
+            let body = '';
+            
+            if (outcome === 'success') {
+              body = '### ✅ MISSION ACCOMPLISHED\n\n' +
+                     'System status: **PASSED**.\n' +
+                     'Great job, Challenger. The automated gate is open.\n' +
+                     '@codeijoe/maintainers will now review your code quality/style.\n\n' +
+                     '*(Wait for final Merge approval)*';
+              
+              // Tambah label otomatis
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: ['status:passed', 'ready-for-review']
+                });
+              } catch (e) { console.log('Label error:', e); }
+              
+            } else {
+              body = '### ❌ MISSION FAILED\n\n' +
+                     'System status: **REJECTED**.\n' +
+                     'Your code did not pass the automated tests. Check the logs below:\n\n' +
+                     '<details><summary>Expand Test Logs</summary>\n\n' +
+                     '```\n' + testResult.slice(0, 2000) + '...\n```\n' +
+                     '\n</details>\n' +
+                     '\n**Action Required:** Fix your code and push again. Do not ask for review until this turns Green.';
+              
+              // Hapus label passed jika ada (re-submit kasus)
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'status:passed'
+                });
+              } catch (e) {} // Ignore error if label doesn't exist
+            }
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail Workflow if Tests Failed
+        if: steps.run_tests.outcome != 'success'
+        run: exit 1
