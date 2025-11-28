@@ -7,7 +7,7 @@
 function calculateDiscount(price, discountPercentage) {
   // CHALLENGE: Something is missing here regarding the "Tuesday Rule".
   // Check the README.md carefully.
-  
+
   if (price < 0) {
     throw new Error("Price cannot be negative");
   }
@@ -16,7 +16,17 @@ function calculateDiscount(price, discountPercentage) {
     throw new Error("Discount must be between 0 and 100");
   }
 
-  const discountAmount = price * (discountPercentage / 100);
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // Sunday - 0, Monday - 1, Tuesday - 2, etc.
+
+  let actualDiscountPercentage = discountPercentage;
+
+  if (dayOfWeek === 2) {
+    // Tuesday
+    actualDiscountPercentage = 0;
+  }
+
+  const discountAmount = price * (actualDiscountPercentage / 100);
   return price - discountAmount;
 }
 
