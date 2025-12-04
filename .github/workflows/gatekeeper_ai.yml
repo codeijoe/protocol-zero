@@ -55,6 +55,8 @@ jobs:
         uses: actions/github-script@v7
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # INJECT SYSTEM CORTEX DARI SECRET
+          SYSTEM_PROMPT: ${{ secrets.SYSTEM_CORTEX_PROMPT }}
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -81,25 +83,17 @@ jobs:
             }
 
             // --- LEVEL 2: DEEP SCAN (Gemini AI) ---
-            const prompt = `
-            ROLE: You are the 'Codeijoe Gatekeeper', a strict software engineering auditor.
-            GOAL: Determine if the Pull Request description demonstrates human engineering reasoning (Trade-off Analysis) or if it is generic AI-generated slop.
+            
+            // Ambil System Prompt dari Secret, atau fallback ke default jika kosong
+            const systemInstruction = process.env.SYSTEM_PROMPT || "You are a strict code auditor.";
 
+            const userPrompt = `
             INPUT DATA:
             - PR Title: "${pr.title}"
             - PR Body: "${bodyClean}"
-
-            RULES:
-            1. REJECT if the description is generic (e.g., "I fixed the bug", "Updated code").
-            2. REJECT if it lacks a "Trade-off Analysis" or explanation of WHY the solution was chosen.
-            3. REJECT if it contains default AI signatures like "Summary:", "Checklist:", "All tests passed".
-            4. PASS only if the user explains their thought process (e.g., complexity analysis, specific edge cases handled).
-
-            OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
-            {
-              "verdict": "PASS" or "FAIL",
-              "reason": "A short, sharp feedback message to the user (max 2 sentences)."
-            }
+            
+            Based on the System Instructions provided to you, determine PASS or FAIL.
+            OUTPUT FORMAT (JSON ONLY): {"verdict": "PASS"|"FAIL", "reason": "..."}
             `;
 
             try {
@@ -107,7 +101,12 @@ jobs:
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                  contents: [{ parts: [{ text: prompt }] }],
+                  contents: [
+                    { 
+                      role: "user", 
+                      parts: [{ text: systemInstruction + "\n\n" + userPrompt }] 
+                    }
+                  ],
                   generationConfig: { responseMimeType: "application/json" }
                 })
               });
